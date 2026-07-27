@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Food Truck Inventory Dashboard — Track ingredients, yield, waste, and purchase orders in one place.">
+<title>Food Truck — Inventory Dashboard</title>
+<style>
+  :root {
+    --orange: #E8720C;
+    --orange-dark: #B04E00;
+    --orange-light: #FFF3E6;
+    --border: #f0dcc8;
+    --text: #3a2a1a;
+    --text-muted: #8a7360;
+    --bg: #FFFDFB;
+    --green: #2f7a3d;
+    --green-light: #e7f5ea;
+    --red: #c0392b;
+    --red-light: #fde8e8;
+    --blue: #3d4fa1;
+    --blue-light: #eef1fa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .app { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 72px;
+    background: #fff;
+    border-right: 1px solid var(--border);
+    padding: 1.2rem 0.5rem;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .logo {
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+  .logo svg { width: 30px; height: 30px; }
+  .nav-item {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    font-size: 20px;
+    color: var(--text-muted);
+    cursor: pointer; margin-bottom: 6px;
+    transition: background 0.15s, transform 0.1s;
+    position: relative;
+  }
+  .nav-item.active { background: var(--orange-light); color: var(--orange-dark); }
+  .nav-item:hover:not(.active) { background: #faf6f1; transform: scale(1.08); }
+  /* Tooltip on hover */
+  .nav-item::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 54px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #3a2a1a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 5px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 200;
+  }
+  .nav-item:hover::after { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; padding: 2rem; max-width: 1160px; }
+
+  /* Hero */
+  .hero {
+    background: var(--orange);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.25rem;
+    color: #fff;
+    overflow: hidden;
+    position: relative;
+    min-height: 120px;
+  }
+  .hero-bg-img {
+    position: absolute;
+    right: 0; top: 0;
+    width: 340px; height: 100%;
+    object-fit: cover;
+    object-position: center left;
+    border-radius: 0 14px 14px 0;
+    opacity: 0.82;
+    pointer-events: none;
+  }
+  .hero-text {
+    position: relative;
+    z-index: 1;
+  }
+  .hero-text h1 { font-size: 22px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.18); }
+  .hero-text p  { font-size: 13px; opacity: 0.92; margin-top: 4px; }
+
+  /* Location cards */
+  .location-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; margin-bottom: 1.25rem; }
+  .loc-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .loc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(232,114,12,0.1); }
+  .loc-card-header {
+    background: var(--orange-light);
+    padding: 0.9rem 1.1rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .loc-card-header h3 { font-size: 14px; font-weight: 700; }
+  .loc-card-body { padding: 0.9rem 1.1rem; }
+  .loc-detail { display: flex; gap: 8px; font-size: 13px; margin-bottom: 6px; align-items: flex-start; }
+  .loc-detail span.icon { width: 18px; flex-shrink: 0; }
+  .loc-detail span.val { color: var(--text); }
+  .loc-schedule {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+  .day-chip {
+    padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    background: var(--orange-light); color: var(--orange-dark);
+  }
+  .day-chip.off { background: #f5f5f5; color: #aaa; }
+  .loc-ing-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid #f5ede2;
+  }
+  .loc-ing-row:last-child { border-bottom: none; }
+  .loc-ing-qty { font-weight: 700; color: var(--orange-dark); }
+
+  /* Date Range Filter */
+  .date-filter {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .date-filter-label { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+  .period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .period-btn {
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border);
+    background: #fff; color: var(--text-muted);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .period-btn.active { background: var(--orange); color: #fff; border-color: var(--orange); }
+  .period-btn:hover:not(.active) { border-color: var(--orange); color: var(--orange-dark); }
+  .custom-dates { display: none; align-items: center; gap: 8px; font-size: 13px; }
+  .custom-dates.visible { display: flex; }
+  .custom-dates input[type="date"] {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; outline: none; color: var(--text); cursor: pointer;
+  }
+  .custom-dates input[type="date"]:focus { border-color: var(--orange); }
+  .period-display { margin-left: auto; font-size: 12px; color: var(--text-muted); font-style: italic; white-space: nowrap; }
+
+  /* Page header */
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header p  { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Buttons */
+  .btn {
+    background: var(--orange); color: #fff; border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: var(--orange-dark); }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  .btn-outline {
+    background: #fff; color: var(--orange-dark); border: 1px solid var(--orange);
+    padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-outline:hover { background: var(--orange-light); }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 1.75rem; }
+  .stat-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(232,114,12,0.1); }
+  .stat-card p.label { font-size: 12px; color: var(--text-muted); }
+  .stat-card p.value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat-card p.sub   { font-size: 12px; margin-top: 4px; }
+  .up   { color: var(--green); }
+  .down { color: var(--red); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .tab {
+    padding: 10px 16px; font-size: 14px; color: var(--text-muted);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap;
+  }
+  .tab.active { color: var(--orange-dark); font-weight: 600; border-bottom: 2px solid var(--orange); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 1.25rem; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 18px; color: var(--text-muted); font-weight: 600; font-size: 12px; background: var(--orange-light); }
+  td { padding: 10px 18px; border-top: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: #fffaf4; }
+
+  /* Badges */
+  .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block; }
+  .badge-ok      { background: var(--green-light); color: var(--green); }
+  .badge-warn    { background: var(--orange-light); color: var(--orange-dark); }
+  .badge-bad     { background: var(--red-light); color: var(--red); }
+  .badge-pending { background: var(--blue-light); color: var(--blue); }
+
+  /* Search / toolbar */
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; background: #fff; width: 240px;
+  }
+  .search input { border: none; outline: none; font-size: 13px; width: 100%; background: transparent; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+
+  /* Alert banner */
+  .alert-banner {
+    background: var(--orange-light);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--orange);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Section title */
+  .section-title {
+    font-size: 15px; font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* Yield panel */
+  .yield-delta-positive { color: var(--green); font-weight: 600; }
+  .yield-delta-negative { color: var(--red); font-weight: 600; }
+  .yield-delta-zero     { color: var(--text-muted); font-weight: 600; }
+
+  .yield-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .yield-bar-bg { flex: 1; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .yield-bar-fill { height: 7px; border-radius: 4px; transition: width 0.4s ease; }
+  .yield-bar-fill.ok  { background: var(--green); }
+  .yield-bar-fill.low { background: var(--red); }
+  .yield-bar-fill.mid { background: var(--orange); }
+
+  /* Waste analytics */
+  .waste-analytics {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 14px; margin-bottom: 1.25rem;
+  }
+  .analytics-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 1rem 1.1rem;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .analytics-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(232,114,12,0.08); }
+  .analytics-card .a-label { font-size: 12px; color: var(--text-muted); }
+  .analytics-card .a-value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+  .analytics-card .a-sub   { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  /* Reason breakdown */
+  .reason-breakdown { display: flex; flex-direction: column; gap: 10px; padding: 1rem 1.25rem; }
+  .reason-row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .reason-label  { width: 170px; flex-shrink: 0; }
+  .reason-bar-bg { flex: 1; height: 9px; background: var(--border); border-radius: 5px; overflow: hidden; }
+  .reason-bar-fill { height: 9px; border-radius: 5px; transition: width 0.4s ease; }
+  .reason-cost { font-size: 12px; font-weight: 600; color: var(--text-muted); width: 55px; text-align: right; flex-shrink: 0; }
+  .r-expired        { background: #c0392b; }
+  .r-temp           { background: #e74c3c; }
+  .r-prep           { background: var(--orange); }
+  .r-overproduction { background: #e67e22; }
+  .r-burns          { background: #d35400; }
+
+  /* Menu cards */
+  .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .menu-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 1rem; text-align: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .menu-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(232,114,12,0.1); }
+  .menu-card svg      { width: 56px; height: 56px; margin-bottom: 8px; }
+  .menu-card p.name   { font-size: 14px; font-weight: 600; }
+  .menu-card p.price  { font-size: 13px; color: var(--orange-dark); font-weight: 700; margin-top: 2px; }
+  .menu-card p.yield-qty {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .menu-card p.yield-qty span { color: var(--orange-dark); font-weight: 600; }
+
+  /* ── Modal overlay ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(58,42,26,0.45);
+    backdrop-filter: blur(3px);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2rem;
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(58,42,26,0.18);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.25rem;
+  }
+  .modal-header h2 { font-size: 16px; font-weight: 700; }
+  .modal-close {
+    background: none; border: none; font-size: 20px;
+    cursor: pointer; color: var(--text-muted); line-height: 1;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .modal-close:hover { background: var(--orange-light); color: var(--orange-dark); }
+  .form-row { margin-bottom: 1rem; }
+  .form-row label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+  .form-row input, .form-row select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 13px;
+    outline: none;
+    color: var(--text);
+    background: #fff;
+    transition: border-color 0.15s;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: var(--orange); }
+  .form-row-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #3a2a1a; color: #fff;
+    padding: 12px 20px; border-radius: 10px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transform: translateY(10px);
+    transition: all 0.3s; pointer-events: none;
+    z-index: 2000;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+.flow-banner{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:var(--radius);padding:1rem 1.5rem;margin-bottom:1.25rem;flex-wrap:wrap;gap:0}
+.flow-step{text-align:center;padding:8px 16px}.flow-step.hi{background:rgba(232,114,12,.25);border-radius:10px}
+.flow-icon{font-size:22px;margin-bottom:3px}.flow-lbl{font-size:10px;color:rgba(255,255,255,.85);font-weight:700;line-height:1.4;white-space:nowrap}
+.flow-arr{color:rgba(255,255,255,.3);font-size:20px;padding:0 2px}
+.dash-3col{display:grid;grid-template-columns:1fr 272px;gap:14px;margin-bottom:14px}
+.inv-row{display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:12.5px}
+.inv-row:last-child{border-bottom:none}
+.chain-row{padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.chain-row:hover{background:var(--orange-light)}.chain-row:last-child{border-bottom:none}
+.chain-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.ctag{border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600}
+.ctag-ok{background:var(--green-l);color:#065f46}.ctag-low{background:var(--yellow-l);color:#92400e}.ctag-out{background:var(--red-l);color:#991b1b}
+
+/* ── Missing CSS variables fix ── */
+:root {
+  --green-l: #dcfce7;
+  --yellow-l: #fef9c3;
+  --red-l: #fee2e2;
+  --radius: 12px;
+}
+
+/* ── Dashboard cards ── */
+.dash-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.dash-card-h {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--orange-light);
+}
+.dash-card-h h3 { font-size: 13px; font-weight: 700; }
+.dash-card-b { padding: 10px 14px; }
+
+/* ── Quick Sale row ── */
+.qs-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qs-row select, .qs-row input {
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 7px 10px; font-size: 13px; outline: none; color: var(--text);
+}
+.qs-row select:focus, .qs-row input:focus { border-color: var(--orange); }
+.btn-g { background: var(--green); color: #fff; border: none;
+  padding: 8px 14px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-g:hover { background: #245e2f; }
+
+/* ── Sales feed ── */
+.feed { display: flex; flex-direction: column; gap: 5px; max-height: 210px; overflow-y: auto; }
+.feed-item {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; padding: 5px 8px; border-radius: 6px; background: var(--orange-light);
+}
+.feed-item .fi-name { font-weight: 600; }
+.feed-item .fi-meta { color: var(--text-muted); font-size: 11px; }
+
+/* ── Today card (truck stop) ── */
+.today-card {
+  background: linear-gradient(135deg, var(--orange), var(--orange-dark));
+  border-radius: var(--radius); padding: 14px 16px; color: #fff;
+}
+.today-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .85; margin-bottom: 4px; }
+.today-name  { font-size: 16px; font-weight: 700; }
+.today-detail { font-size: 12px; opacity: .88; margin-top: 3px; }
+.live-dot { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; font-weight: 600; }
+.dot {
+  width: 9px; height: 9px; border-radius: 50%; background: #a8f0a8;
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(168,240,168,.7); }
+  50%       { box-shadow: 0 0 0 5px rgba(168,240,168,0); }
+}
+
+/* ── Stock alerts ── */
+.alert-list { display: flex; flex-direction: column; gap: 6px; }
+.alert-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; padding: 6px 10px;
+  border-radius: 8px; background: var(--red-light);
+  border-left: 3px solid var(--red);
+}
+.alert-item.warn { background: var(--orange-light); border-color: var(--orange); }
+
+/* ── Info pill ── */
+.info-pill {
+  font-size: 10px; background: rgba(255,255,255,.3);
+  border-radius: 10px; padding: 2px 8px; color: var(--orange-dark);
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="24" width="40" height="20" rx="3" fill="#E8720C"/>
+        <rect x="44" y="30" width="14" height="14" rx="2" fill="#B04E00"/>
+        <circle cx="16" cy="46" r="5" fill="#3a2a1a"/>
+        <circle cx="44" cy="46" r="5" fill="#3a2a1a"/>
+        <rect x="8" y="16" width="16" height="8" rx="1" fill="#FFF3E6"/>
+      </svg>
+      Food Truck
+    </div>
+    <div class="nav-item active" id="nav-dashboard"  data-tip="Dashboard"  style="cursor:default">📊</div>
+    <div class="nav-item"        id="nav-ingredients" data-tip="Ingredients"  onclick="showNav('ingredients')">🥦</div>
+    <div class="nav-item"        id="nav-orders"      data-tip="Purchase orders" onclick="showNav('orders')">📋</div>
+    <div class="nav-item"        id="nav-menu"        data-tip="Recipe items"  onclick="showNav('menu')">🍔</div>
+    <div class="nav-item"        id="nav-locations"   data-tip="Put-away locations" onclick="showNav('locations')">📦</div>
+    <div class="nav-item"        id="nav-waste"       data-tip="Waste log"    onclick="showNav('waste')">🗑️</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-text">
+        <h1>Good morning — the truck is stocked and ready</h1>
+        <p>Commissary kitchen · Seattle, WA · Thursday, July 17, 2025</p>
+      </div>
+      <!-- UPDATE src below to your image path, e.g. src="C:/Users/hp/Downloads/food_truck.jpg" -->
+      <img class="hero-bg-img" id="hero-truck-img"
+           src="YOUR_TRUCK_IMAGE_HERE.png"
+           alt="Kshitij Food Truck"
+           onerror="this.style.display='none'">
+    </div>
+
+    <!-- DATE RANGE FILTER (Priority #1) -->
+    <div class="date-filter">
+      <span class="date-filter-label">📅 Period:</span>
+      <div class="period-btns">
+        <button class="period-btn"        onclick="setPeriod(this,'Today')">Today</button>
+        <button class="period-btn active" onclick="setPeriod(this,'This Week')">This Week</button>
+        <button class="period-btn"        onclick="setPeriod(this,'This Month')">This Month</button>
+        <button class="period-btn"        onclick="setPeriod(this,'Custom',true)">Custom range</button>
+      </div>
+      <div class="custom-dates" id="customDates">
+        <input type="date" id="dateFrom" value="2025-07-10">
+        <span style="color:var(--text-muted)">to</span>
+        <input type="date" id="dateTo" value="2025-07-17">
+        <button class="btn btn-sm" onclick="applyCustomDate()">Apply</button>
+      </div>
+      <span class="period-display" id="periodDisplay">Jul 11 – Jul 17, 2025</span>
+    </div>
+
+    <!-- Page header -->
+    <div class="header">
+      <div>
+        <h1>Inventory dashboard</h1>
+        <p>Track stock, purchase orders, recipe items and waste in one place</p>
+      </div>
+      <button class="btn" onclick="openModal('modal-add-order')">+ New purchase order</button>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stats">
+      <div class="stat-card">
+        <p class="label">Active ingredients</p>
+        <p class="value" id="stat-ingredients">18</p>
+        <p class="sub up">2 low on reorder point</p>
+      </div>
+      <div class="stat-card">
+        <p class="label">Open purchase orders</p>
+        <p class="value" id="stat-orders">3</p>
+        <p class="sub">1 partial, 2 pending</p>
+      </div>
+      <div class="stat-card">
+        <p class="label">Waste cost <span id="stat-waste-period" style="font-size:10px;color:var(--text-muted)">(this week)</span></p>
+        <p class="value down" id="stat-waste">$86.40</p>
+        <p class="sub down">Mostly produce &amp; temp issues</p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(this,'dashboard')">🏠 Dashboard</div>
+      <div class="tab" onclick="showTab(this,'ingredients')">Ingredients</div>
+      <div class="tab"        onclick="showTab(this,'orders')">Purchase Orders</div>
+      <div class="tab"        onclick="showTab(this,'menu')">Recipe Items</div>
+      <div class="tab"        onclick="showTab(this,'locations')">📍 Locations</div>
+      <div class="tab"        onclick="showTab(this,'waste')">Waste Log</div>
+    </div>
+
+
+    <!-- DASHBOARD PANEL -->
+    <div class="panel active" id="dashboard">
+
+      <!-- System Flow Banner -->
+      <div class="flow-banner">
+        <div class="flow-step"><div class="flow-icon">🧾</div><div class="flow-lbl">Purchase<br>Orders</div></div>
+        <div class="flow-arr">→</div>
+        <div class="flow-step"><div class="flow-icon">📦</div><div class="flow-lbl">Purchased<br>Ingredients</div></div>
+        <div class="flow-arr">→</div>
+        <div class="flow-step"><div class="flow-icon">📖</div><div class="flow-lbl">Recipes<br>(Yield %)</div></div>
+        <div class="flow-arr">→</div>
+        <div class="flow-step"><div class="flow-icon">🍔</div><div class="flow-lbl">Menu<br>Items</div></div>
+        <div class="flow-arr">→</div>
+        <div class="flow-step hi"><div class="flow-icon">✓</div><div class="flow-lbl">Record<br>Sale</div></div>
+        <div class="flow-arr">→</div>
+        <div class="flow-step"><div class="flow-icon">📉</div><div class="flow-lbl">Stock Auto-<br>Deducted</div></div>
+      </div>
+
+      <!-- 3-column grid -->
+      <div class="dash-3col">
+
+        <!-- Quick Sale + Sales feed -->
+        <div class="dash-card">
+          <div class="dash-card-h"><h3>⚡ Record a Sale</h3><span class="info-pill">📦 Deducts stock via recipe</span></div>
+          <div class="dash-card-b">
+            <div class="qs-row">
+              <select id="qs-item" style="flex:1;min-width:180px"></select>
+              <input type="number" id="qs-qty" value="1" min="1" max="99" style="width:65px">
+              <button class="btn btn-g btn-sm" onclick="quickSale()">✓ Sell</button>
+            </div>
+            <div style="margin-top:11px">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:7px">Today Sales Activity</div>
+              <div id="sales-feed" class="feed"><div style="font-size:13px;color:var(--text-muted);padding:10px 0;text-align:center">No sales yet</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's location + Stock Alerts -->
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="today-card">
+            <div class="today-label">📍 Today Truck Stop</div>
+            <div class="today-name">Downtown Plaza</div>
+            <div class="today-detail">1420 5th Ave, Seattle, WA</div>
+            <div class="today-detail" style="margin-top:3px">🕐 11:00 AM – 3:00 PM</div>
+            <div class="live-dot"><span class="dot"></span>Live Now</div>
+          </div>
+          <div class="dash-card">
+            <div class="dash-card-h"><h3>⚠️ Stock Alerts</h3></div>
+            <div class="dash-card-b" style="padding-top:8px"><div id="stock-alerts" class="alert-list"></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- INGREDIENTS PANEL -->
+    <div class="panel" id="ingredients">
+      <div class="toolbar">
+        <div class="search">🔍 <input placeholder="Search ingredients" oninput="filterTable(this,'ing-table')"></div>
+        <button class="btn-outline" onclick="openModal('modal-add-ingredient')">+ Add ingredient</button>
+      </div>
+      <div class="card">
+        <table id="ing-table">
+          <tr>
+            <th>Name</th><th>Category</th><th>Base unit</th>
+            <th>Expected yield %</th><th>Actual yield %</th><th>Variance</th>
+            <th>Reorder point</th><th>Status</th>
+          </tr>
+          <tr>
+            <td>Ground beef</td><td>Protein</td><td>oz</td>
+            <td>100%</td><td>100%</td><td class="yield-delta-zero">±0%</td>
+            <td>10 lb</td><td><span class="badge badge-ok">In stock</span></td>
+          </tr>
+          <tr>
+            <td>Whole onion</td><td>Produce</td><td>each</td>
+            <td>90%</td><td>87%</td><td class="yield-delta-negative">−3%</td>
+            <td>15 lb</td><td><span class="badge badge-warn">Low</span></td>
+          </tr>
+          <tr>
+            <td>Tomatoes</td><td>Produce</td><td>oz</td>
+            <td>92%</td><td>90%</td><td class="yield-delta-negative">−2%</td>
+            <td>12 lb</td><td><span class="badge badge-ok">In stock</span></td>
+          </tr>
+          <tr>
+            <td>Lettuce</td><td>Produce</td><td>oz</td>
+            <td>85%</td><td>88%</td><td class="yield-delta-positive">+3%</td>
+            <td>8 lb</td><td><span class="badge badge-warn">Low</span></td>
+          </tr>
+          <tr>
+            <td>Cheese slices</td><td>Dairy</td><td>slice</td>
+            <td>100%</td><td>100%</td><td class="yield-delta-zero">±0%</td>
+            <td>50 slice</td><td><span class="badge badge-ok">In stock</span></td>
+          </tr>
+          <tr>
+            <td>Burger buns</td><td>Dry goods</td><td>each</td>
+            <td>100%</td><td>100%</td><td class="yield-delta-zero">±0%</td>
+            <td>40 each</td><td><span class="badge badge-bad">Out</span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+
+
+
+
+
+    <!-- PURCHASE ORDERS PANEL (Priority #3) -->
+    <div class="panel" id="orders">
+      <div class="toolbar">
+        <div class="search">🔍 <input placeholder="Search orders" oninput="filterTable(this,'orders-table')"></div>
+        <button class="btn" onclick="openModal('modal-add-order')">+ New order</button>
+      </div>
+      <div class="alert-banner">
+        📋 <strong>INV-10431 &amp; INV-10437</strong> are pending delivery — expected Jul 17–18. INV-10419 is partially received (3 of 5 bags).
+      </div>
+      <div class="card">
+        <table id="orders-table">
+          <tr><th>Invoice #</th><th>Vendor</th><th>Order date</th><th>Items ordered</th><th>Total</th><th>Status</th></tr>
+          <tr>
+            <td>INV-10422</td><td>Golden Valley Meats</td><td>Jul 14</td>
+            <td style="color:var(--text-muted);font-size:12px">Ground beef 20 lb · Chicken 10 lb</td>
+            <td>$212.50</td><td><span class="badge badge-ok">Received</span></td>
+          </tr>
+          <tr>
+            <td>INV-10431</td><td>Harvest Fields Produce</td><td>Jul 15</td>
+            <td style="color:var(--text-muted);font-size:12px">Onion 30 lb · Tomatoes 25 lb · Lettuce 10 lb</td>
+            <td>$134.20</td><td><span class="badge badge-pending">Pending</span></td>
+          </tr>
+          <tr>
+            <td>INV-10437</td><td>Metro Foods Distribution</td><td>Jul 16</td>
+            <td style="color:var(--text-muted);font-size:12px">Burger buns 200 ea · Cheese slices 100 sl</td>
+            <td>$488.00</td><td><span class="badge badge-pending">Pending</span></td>
+          </tr>
+          <tr>
+            <td>INV-10419</td><td>CostSave Wholesale</td><td>Jul 12</td>
+            <td style="color:var(--text-muted);font-size:12px">Fries 5 bags — 3 of 5 received</td>
+            <td>$96.75</td><td><span class="badge badge-warn">Partial</span></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- MENU ITEMS PANEL -->
+    <div class="panel" id="menu">
+      <div class="toolbar">
+        <div class="search">🔍 <input placeholder="Search menu"></div>
+        <button class="btn-outline" onclick="openModal('modal-add-menu')">+ Add recipe item</button>
+      </div>
+      <div class="menu-grid">
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="#FFF3E6"/><ellipse cx="32" cy="22" rx="18" ry="8" fill="#E8B84B"/><rect x="14" y="28" width="36" height="10" fill="#7a4a2b"/><ellipse cx="32" cy="42" rx="18" ry="8" fill="#E8B84B"/></svg>
+          <p class="name">Cheeseburger</p>
+          <p class="price">$8.50</p>
+          <p class="yield-qty">Ingredients required: <span>40 each / batch</span></p>
+        </div>
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><rect x="10" y="26" width="44" height="12" rx="6" fill="#E8B84B"/><rect x="14" y="30" width="36" height="4" fill="#E8720C"/></svg>
+          <p class="name">Classic sandwich</p>
+          <p class="price">$7.00</p>
+          <p class="yield-qty">Ingredients required: <span>30 each / batch</span></p>
+        </div>
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><rect x="12" y="14" width="40" height="36" rx="4" fill="#FFF3E6"/><line x1="12" y1="24" x2="52" y2="24" stroke="#E8720C" stroke-width="2"/><line x1="12" y1="34" x2="52" y2="34" stroke="#E8720C" stroke-width="2"/></svg>
+          <p class="name">Combo meal</p>
+          <p class="price">$11.25</p>
+          <p class="yield-qty">Ingredients required: <span>25 each / batch</span></p>
+        </div>
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><rect x="20" y="14" width="24" height="36" rx="3" fill="#E8B84B"/></svg>
+          <p class="name">Fries</p>
+          <p class="price">$3.75</p>
+          <p class="yield-qty">Ingredients required: <span>80 portions / bag</span></p>
+        </div>
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><rect x="22" y="10" width="20" height="40" rx="8" fill="#B04E00"/></svg>
+          <p class="name">Fountain drink</p>
+          <p class="price">$2.50</p>
+          <p class="yield-qty">Ingredients required: <span>1 each</span></p>
+        </div>
+        <div class="menu-card">
+          <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="20" fill="#E8B84B"/><circle cx="32" cy="32" r="10" fill="#fff"/></svg>
+          <p class="name">Dessert of the day</p>
+          <p class="price">$4.00</p>
+          <p class="yield-qty">Ingredients required: <span>12 each / batch</span></p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- WASTE LOG PANEL (Priority #4) -->
+    <div class="panel" id="waste">
+
+      <!-- Analytics summary -->
+      <div class="waste-analytics">
+        <div class="analytics-card">
+          <p class="a-label">Total waste cost <span id="waste-period-label" style="font-size:10px">(this week)</span></p>
+          <p class="a-value down" id="waste-total">$47.45</p>
+          <p class="a-sub">↑ $12 vs prior week</p>
+        </div>
+        <div class="analytics-card">
+          <p class="a-label">Top waste reason</p>
+          <p class="a-value" style="font-size:15px;margin-top:6px">🌡️ Temp issue</p>
+          <p class="a-sub">$21.25 — Ground beef (Jul 14)</p>
+        </div>
+        <div class="analytics-card">
+          <p class="a-label">Items logged</p>
+          <p class="a-value" id="waste-items">5</p>
+          <p class="a-sub">Across 4 ingredients</p>
+        </div>
+      </div>
+
+      <!-- Reason breakdown -->
+      <p class="section-title">Waste breakdown by reason</p>
+      <div class="card" style="margin-bottom:1.25rem">
+        <div class="reason-breakdown">
+          <div class="reason-row">
+            <span class="reason-label">🌡️ Temperature issue</span>
+            <div class="reason-bar-bg"><div class="reason-bar-fill r-temp" style="width:65%"></div></div>
+            <span class="reason-cost">$21.25</span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-label">⏰ Expired</span>
+            <div class="reason-bar-bg"><div class="reason-bar-fill r-expired" style="width:55%"></div></div>
+            <span class="reason-cost">$9.00</span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-label">✂️ Prep waste</span>
+            <div class="reason-bar-bg"><div class="reason-bar-fill r-prep" style="width:45%"></div></div>
+            <span class="reason-cost">$8.80</span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-label">📦 Overproduction</span>
+            <div class="reason-bar-bg"><div class="reason-bar-fill r-overproduction" style="width:28%"></div></div>
+            <span class="reason-cost">$6.00</span>
+          </div>
+          <div class="reason-row">
+            <span class="reason-label">🔥 Burns</span>
+            <div class="reason-bar-bg"><div class="reason-bar-fill r-burns" style="width:12%"></div></div>
+            <span class="reason-cost">$2.40</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Waste log table -->
+      <div class="toolbar">
+        <div class="search">🔍 <input placeholder="Search waste log" oninput="filterTable(this,'waste-table')"></div>
+        <button class="btn-outline" onclick="openModal('modal-log-waste')">+ Log waste</button>
+      </div>
+      <div class="card">
+        <table id="waste-table">
+          <tr><th>Ingredient</th><th>Reason</th><th>Quantity</th><th>Est. cost</th><th>Location</th><th>Date</th></tr>
+          <tr><td>Ground beef</td><td>🌡️ Temperature issue</td><td>5 lb</td><td>$21.25</td><td>🚛 Refrigerator — On Truck</td><td>Jul 14</td></tr>
+          <tr><td>Lettuce</td><td>⏰ Expired</td><td>3 lb</td><td>$9.00</td><td>❄️ Commissary Walk-In Cooler</td><td>Jul 15</td></tr>
+          <tr><td>Tomatoes</td><td>✂️ Prep waste</td><td>4 lb</td><td>$8.80</td><td>❄️ Commissary Walk-In Cooler</td><td>Jul 16</td></tr>
+          <tr><td>Buns</td><td>📦 Overproduction</td><td>12 each</td><td>$6.00</td><td>📦 Dry Storage — On Truck</td><td>Jul 13</td></tr>
+          <tr><td>Ground beef</td><td>🔥 Burns</td><td>0.5 lb</td><td>$2.40</td><td>🚛 Refrigerator — On Truck</td><td>Jul 16</td></tr>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- LOCATIONS PANEL (Ted's Put-Away Locations Concept) -->
+    <div class="panel" id="locations">
+      <div class="toolbar">
+        <div>
+          <div style="font-size:15px;font-weight:600">📦 Put-away locations</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Storage spots where ingredients are kept — used for cycle counts</div>
+        </div>
+        <button class="btn" onclick="openModal('modal-add-location')">+ Add put-away location</button>
+      </div>
+
+      <!-- Summary bar -->
+      <div class="waste-analytics" style="margin-bottom:1.25rem">
+        <div class="analytics-card">
+          <p class="a-label">Total locations</p>
+          <p class="a-value up" id="loc-count">4</p>
+          <p class="a-sub">Storage spots</p>
+        </div>
+        <div class="analytics-card">
+          <p class="a-label">Ingredients tracked</p>
+          <p class="a-value" style="font-size:20px;margin-top:6px">11</p>
+          <p class="a-sub">Across all locations</p>
+        </div>
+        <div class="analytics-card">
+          <p class="a-label">Cycle count status</p>
+          <p class="a-value" style="font-size:14px;margin-top:6px;color:#2f7a3d">✔ Up to date</p>
+          <p class="a-sub">Last count: today</p>
+        </div>
+      </div>
+
+      <!-- Explainer -->
+      <div style="background:#fff8f0;border:1px solid #f0dcc8;border-radius:8px;padding:10px 14px;margin-bottom:1.1rem;font-size:12.5px;color:#5a3e28;line-height:1.7">
+        💡 <strong>Put-away location</strong> = a physical storage spot where ingredients are kept — e.g. <em>Refrigerator on Truck</em>, <em>Garage Shelf</em>, <em>Storage Center</em>. During cycle counts, verify quantities <strong>by location</strong> to validate total stock.
+      </div>
+
+      <div class="location-grid" id="location-grid">
+
+        <!-- Refrigerator on Truck -->
+        <div class="loc-card">
+          <div class="loc-card-header">
+            <h3>🚛 Refrigerator — On Truck</h3>
+            <span class="badge badge-ok">On truck</span>
+          </div>
+          <div class="loc-card-body">
+            <div class="loc-detail"><span class="icon">📋</span><span class="val">Cold storage · On vehicle · 35–40 °F</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0dcc8">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;margin-bottom:7px">🔢 Cycle count — ingredients here</div>
+              <div class="loc-ing-row"><span>🥩 Ground Beef</span><span class="loc-ing-qty">160 oz</span></div>
+              <div class="loc-ing-row"><span>🍅 Tomato</span><span class="loc-ing-qty">12 oz</span></div>
+              <div class="loc-ing-row"><span>🥬 Lettuce</span><span class="loc-ing-qty">10 oz</span></div>
+              <div class="loc-ing-row"><span>🧀 Cheese</span><span class="loc-ing-qty">8 oz</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dry Storage on Truck -->
+        <div class="loc-card">
+          <div class="loc-card-header">
+            <h3>📦 Dry Storage — On Truck</h3>
+            <span class="badge badge-ok">On truck</span>
+          </div>
+          <div class="loc-card-body">
+            <div class="loc-detail"><span class="icon">📋</span><span class="val">Dry storage · On vehicle · Ambient temp</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0dcc8">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;margin-bottom:7px">🔢 Cycle count — ingredients here</div>
+              <div class="loc-ing-row"><span>🍞 Burger Bun</span><span class="loc-ing-qty">24 pcs</span></div>
+              <div class="loc-ing-row"><span>🧂 Salt &amp; Spices</span><span class="loc-ing-qty">16 oz</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Commissary Walk-In Cooler -->
+        <div class="loc-card">
+          <div class="loc-card-header">
+            <h3>❄️ Commissary Walk-In Cooler</h3>
+            <span class="badge badge-ok">Commissary</span>
+          </div>
+          <div class="loc-card-body">
+            <div class="loc-detail"><span class="icon">📋</span><span class="val">Cold storage · Main Kitchen · 34–38 °F</span></div>
+            <div class="loc-detail"><span class="icon">📌</span><span class="val">1420 5th Ave, Seattle, WA</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0dcc8">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;margin-bottom:7px">🔢 Cycle count — ingredients here</div>
+              <div class="loc-ing-row"><span>🥩 Ground Beef</span><span class="loc-ing-qty">160 oz</span></div>
+              <div class="loc-ing-row"><span>🍅 Tomato</span><span class="loc-ing-qty">12 oz</span></div>
+              <div class="loc-ing-row"><span>🧀 Paneer</span><span class="loc-ing-qty">30 oz</span></div>
+              <div class="loc-ing-row"><span>🍗 Chicken</span><span class="loc-ing-qty">6 oz</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Home Garage -->
+        <div class="loc-card">
+          <div class="loc-card-header">
+            <h3>🏠 Garage — Home Storage</h3>
+            <span class="badge badge-warn">Off-site</span>
+          </div>
+          <div class="loc-card-body">
+            <div class="loc-detail"><span class="icon">📋</span><span class="val">Backup dry + cold storage · Off-site</span></div>
+            <div class="loc-detail"><span class="icon">📌</span><span class="val">Storage Center, Seattle, WA</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0dcc8">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;margin-bottom:7px">🔢 Cycle count — ingredients here</div>
+              <div class="loc-ing-row"><span>🥩 Ground Beef</span><span class="loc-ing-qty">160 oz</span></div>
+              <div class="loc-ing-row"><span>🍞 Burger Bun</span><span class="loc-ing-qty">24 pcs</span></div>
+              <div class="loc-ing-row"><span>🥔 Potato</span><span class="loc-ing-qty">22 lbs</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════════
+     MODALS
+     ══════════════════════════════════════════ -->
+
+<!-- Add Ingredient -->
+<div class="modal-overlay" id="modal-add-ingredient" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🥦 Add ingredient</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-ingredient')">✕</button>
+    </div>
+    <div class="form-row"><label>Ingredient name</label><input id="ing-name" placeholder="e.g. Jalapeños"></div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Category</label>
+        <select id="ing-cat">
+          <option>Produce</option><option>Protein</option><option>Dairy</option>
+          <option>Dry goods</option><option>Condiments</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Base unit</label>
+        <select id="ing-unit"><option>oz</option><option>lb</option><option>each</option><option>slice</option><option>kg</option><option>liter</option></select>
+      </div>
+    </div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Expected yield %</label><input id="ing-exp-yield" type="number" min="0" max="100" placeholder="e.g. 90"></div>
+      <div class="form-row"><label>Actual yield %</label><input id="ing-act-yield" type="number" min="0" max="100" placeholder="e.g. 87"></div>
+    </div>
+    <div class="form-row"><label>Reorder point</label><input id="ing-reorder" placeholder="e.g. 15 lb"></div>
+    <div class="form-row"><label>Status</label>
+      <select id="ing-status"><option>In stock</option><option>Low</option><option>Out</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-add-ingredient')">Cancel</button>
+      <button class="btn" onclick="addIngredient()">Add ingredient</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Vendor -->
+<div class="modal-overlay" id="modal-add-vendor" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🏪 Add vendor</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-vendor')">✕</button>
+    </div>
+    <div class="form-row"><label>Vendor name</label><input id="v-name" placeholder="e.g. Sunny Farm Co."></div>
+    <div class="form-row"><label>Type</label>
+      <select id="v-type"><option>Produce supplier</option><option>Butcher</option><option>Food distributor</option><option>Wholesale club</option><option>Bakery</option><option>Other</option></select>
+    </div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Contact name</label><input id="v-contact" placeholder="e.g. John Smith"></div>
+      <div class="form-row"><label>Phone</label><input id="v-phone" placeholder="(555) 000-0000"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-add-vendor')">Cancel</button>
+      <button class="btn" onclick="addVendor()">Add vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Purchase Order -->
+<div class="modal-overlay" id="modal-add-order" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📋 New purchase order</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-order')">✕</button>
+    </div>
+    <div class="form-row"><label>Invoice #</label><input id="o-invoice" placeholder="e.g. INV-10450"></div>
+    <div class="form-row"><label>Vendor</label>
+      <select id="o-vendor">
+        <option>Golden Valley Meats</option><option>Harvest Fields Produce</option>
+        <option>Metro Foods Distribution</option><option>CostSave Wholesale</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Items ordered</label><input id="o-items" placeholder="e.g. Ground beef 20 lb · Buns 50 ea"></div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Order date</label><input id="o-date" type="date"></div>
+      <div class="form-row"><label>Total ($)</label><input id="o-total" type="number" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-add-order')">Cancel</button>
+      <button class="btn" onclick="addOrder()">Create order</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Recipe Item -->
+<div class="modal-overlay" id="modal-add-menu" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🍔 Add recipe item</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-menu')">✕</button>
+    </div>
+    <div class="form-row"><label>Item name</label><input id="m-name" placeholder="e.g. Cheeseburger"></div>
+    <div class="form-row"><label>Price ($)</label><input id="m-price" type="number" step="0.01" placeholder="0.00" style="max-width:160px"></div>
+    <div class="form-row"><label>Ingredients required to make this item <span style="font-size:10px;font-weight:400;color:var(--text-muted)">(e.g. Ground beef 4oz, Bun 1 each)</span></label><input id="m-yield" placeholder="e.g. Ground beef 4oz · Bun 1 each · Cheese 1 slice"></div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-add-menu')">Cancel</button>
+      <button class="btn" onclick="addMenuItem()">Add recipe item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log Waste -->
+<div class="modal-overlay" id="modal-log-waste" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🗑️ Log waste</h2>
+      <button class="modal-close" onclick="closeModal('modal-log-waste')">✕</button>
+    </div>
+    <div class="form-row"><label>Ingredient</label>
+      <select id="w-ing" onchange="lookupWasteCost()">
+        <option value="">— Select ingredient —</option>
+        <option value="Ground beef" data-cost="0.35">Ground beef (per oz)</option>
+        <option value="Whole onion" data-cost="0.40">Whole onion (per each)</option>
+        <option value="Tomatoes" data-cost="0.18">Tomatoes (per oz)</option>
+        <option value="Lettuce" data-cost="0.12">Lettuce (per oz)</option>
+        <option value="Cheese slices" data-cost="0.22">Cheese slices (per slice)</option>
+        <option value="Burger buns" data-cost="0.30">Burger buns (per each)</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Reason</label>
+      <select id="w-reason">
+        <option>🌡️ Temperature issue</option>
+        <option>⏰ Expired</option>
+        <option>✂️ Prep waste</option>
+        <option>📦 Overproduction</option>
+        <option>🔥 Burns</option>
+        <option>💧 Spillage</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Storage Location</label>
+      <select id="w-loc">
+        <option value="">— Select put-away location —</option>
+        <option>🚛 Refrigerator — On Truck</option>
+        <option>📦 Dry Storage — On Truck</option>
+        <option>❄️ Commissary Walk-In Cooler</option>
+        <option>🏠 Garage — Home Storage</option>
+      </select>
+    </div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Quantity (number of units)</label><input id="w-qty" type="number" min="0" step="0.1" placeholder="e.g. 3" oninput="lookupWasteCost()"></div>
+      <div class="form-row"><label>Est. cost ($) <span style="font-size:10px;color:#2f7a3d;font-weight:600">← auto-calculated</span></label><input id="w-cost" type="number" step="0.01" placeholder="0.00" readonly style="background:#f9f9f9;color:#3a2a1a;font-weight:700"></div>
+    </div>
+    <div class="form-row"><label>Date</label><input id="w-date" type="date"></div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-log-waste')">Cancel</button>
+      <button class="btn" onclick="addWaste()">Log waste</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Location (Put-away) -->
+<div class="modal-overlay" id="modal-add-location" onclick="overlayClose(event,this)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📦 Add put-away location</h2>
+      <button class="modal-close" onclick="closeModal('modal-add-location')">×</button>
+    </div>
+    <div class="form-row"><label>Location name</label><input id="loc-name" placeholder="e.g. Refrigerator on Truck"></div>
+    <div class="form-row-grid">
+      <div class="form-row"><label>Type</label>
+        <select id="loc-type">
+          <option>Cold storage — On truck</option>
+          <option>Dry storage — On truck</option>
+          <option>Refrigerator — Off-site</option>
+          <option>Dry storage — Off-site</option>
+          <option>Freezer</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Zone</label>
+        <select id="loc-zone"><option>On truck</option><option>Off-site</option><option>Commissary</option></select>
+      </div>
+    </div>
+    <div class="form-row"><label>Address <span style="font-size:10px;font-weight:400;color:#8a7360">(optional — leave blank if on truck)</span></label><input id="loc-address" placeholder="e.g. 123 Main St"></div>
+    <div class="form-row"><label>Notes <span style="font-size:10px;font-weight:400;color:#8a7360">(optional)</span></label><input id="loc-notes" placeholder="e.g. bottom shelf, keep at 35°F"></div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeModal('modal-add-location')">Cancel</button>
+      <button class="btn" onclick="addLocation()">Add put-away location</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Tab switching (called by top tab bar) ──
+const TAB_TO_NAV = {
+  dashboard:   null,
+  ingredients: 'nav-ingredients',
+  yield:       null,
+  vendors:     'nav-vendors',
+  orders:      'nav-orders',
+  menu:        'nav-menu',
+  locations:   'nav-locations',
+  waste:       'nav-waste'
+};
+
+function showTab(el, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  // Sync sidebar highlight
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navId = TAB_TO_NAV[id];
+  if (navId) document.getElementById(navId).classList.add('active');
+  else document.getElementById('nav-dashboard').classList.add('active');
+}
+
+// ── Sidebar nav (called by sidebar items) ──
+const NAV_TO_TAB = {
+  dashboard:   'ingredients',
+  ingredients: 'ingredients',
+  vendors:     'vendors',
+  orders:      'orders',
+  menu:        'menu',
+  locations:   'locations',
+  waste:       'waste'
+};
+
+const NAV_TO_TAB_LABEL = {
+  dashboard:   'Ingredients',
+  ingredients: 'Ingredients',
+  vendors:     'Vendors',
+  orders:      'Purchase Orders',
+  menu:        'Menu Items',
+  locations:   '📦 Put-away locations',
+  waste:       'Waste Log'
+};
+
+function showNav(navKey) {
+  // Update sidebar
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-' + navKey).classList.add('active');
+  // Find matching tab by label and activate
+  const targetLabel = NAV_TO_TAB_LABEL[navKey];
+  let matchedTab = null;
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.trim() === targetLabel) matchedTab = t;
+  });
+  if (matchedTab) {
+    matchedTab.click();
+  } else {
+    // fallback: activate the panel directly
+    const panelId = NAV_TO_TAB[navKey];
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    if (document.getElementById(panelId)) document.getElementById(panelId).classList.add('active');
+  }
+}
+
+// ── Period data ──
+const periodData = {
+  'Today':      { ingredients: 18, orders: 3, waste: '$24.05',  yield: '95.1%', wasteLabel: '(today)',      wasteTotal: '$24.05',  wasteItems: '2',  display: 'Jul 17, 2025' },
+  'This Week':  { ingredients: 18, orders: 3, waste: '$86.40',  yield: '94.5%', wasteLabel: '(this week)',  wasteTotal: '$47.45',  wasteItems: '5',  display: 'Jul 11 – Jul 17, 2025' },
+  'This Month': { ingredients: 18, orders: 7, waste: '$312.80', yield: '93.8%', wasteLabel: '(this month)', wasteTotal: '$312.80', wasteItems: '18', display: 'Jul 1 – Jul 17, 2025' },
+  'Custom':     { ingredients: 18, orders: 4, waste: '$148.00', yield: '94.2%', wasteLabel: '(custom)',     wasteTotal: '$148.00', wasteItems: '9',  display: 'Custom range' }
+};
+
+function setPeriod(btn, period, showCustom = false) {
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const customEl = document.getElementById('customDates');
+  if (showCustom) { customEl.classList.add('visible'); }
+  else { customEl.classList.remove('visible'); applyPeriodData(period); }
+}
+
+function applyCustomDate() {
+  const from = document.getElementById('dateFrom').value;
+  const to   = document.getElementById('dateTo').value;
+  const fmt  = d => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const yr   = new Date(to).getFullYear();
+  document.getElementById('periodDisplay').textContent = `${fmt(from)} – ${fmt(to)}, ${yr}`;
+  applyPeriodData('Custom');
+}
+
+function applyPeriodData(period) {
+  const d = periodData[period];
+  if (!d) return;
+  document.getElementById('stat-ingredients').textContent   = d.ingredients;
+  document.getElementById('stat-orders').textContent        = d.orders;
+  document.getElementById('stat-waste').textContent         = d.waste;
+  document.getElementById('stat-waste-period').textContent  = d.wasteLabel;
+  document.getElementById('waste-total').textContent        = d.wasteTotal;
+  document.getElementById('waste-items').textContent        = d.wasteItems;
+  document.getElementById('waste-period-label').textContent = d.wasteLabel;
+  if (period !== 'Custom') document.getElementById('periodDisplay').textContent = d.display;
+}
+
+// ── Table search ──
+function filterTable(input, tableId) {
+  const q = input.value.toLowerCase();
+  document.querySelectorAll(`#${tableId} tr:not(:first-child)`).forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Modal helpers ──
+function openModal(id) {
+  // Pre-fill today's date in date fields
+  const today = new Date().toISOString().split('T')[0];
+  const m = document.getElementById(id);
+  m.querySelectorAll('input[type="date"]').forEach(el => { if (!el.value) el.value = today; });
+  m.classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function overlayClose(e, overlay) { if (e.target === overlay) overlay.classList.remove('open'); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function required(val, label) {
+  if (!val.trim()) { alert(label + ' is required.'); return false; }
+  return true;
+}
+
+// ── Add Ingredient ──
+function addIngredient() {
+  const name    = document.getElementById('ing-name').value;
+  const cat     = document.getElementById('ing-cat').value;
+  const unit    = document.getElementById('ing-unit').value;
+  const expY    = document.getElementById('ing-exp-yield').value;
+  const actY    = document.getElementById('ing-act-yield').value;
+  const reorder = document.getElementById('ing-reorder').value;
+  const status  = document.getElementById('ing-status').value;
+  if (!required(name,'Ingredient name')) return;
+  const exp = parseInt(expY)||100, act = parseInt(actY)||100;
+  const delta = act - exp;
+  const deltaStr = delta === 0 ? '±0%' : (delta > 0 ? '+'+delta+'%' : delta+'%');
+  const deltaClass = delta === 0 ? 'yield-delta-zero' : (delta > 0 ? 'yield-delta-positive' : 'yield-delta-negative');
+  const badgeMap = {'In stock':'badge-ok','Low':'badge-warn','Out':'badge-bad'};
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${name}</td><td>${cat}</td><td>${unit}</td>
+    <td>${exp}%</td><td>${act}%</td><td class="${deltaClass}">${deltaStr}</td>
+    <td>${reorder||'—'}</td><td><span class="badge ${badgeMap[status]||'badge-ok'}">${status}</span></td>`;
+  document.querySelector('#ing-table').appendChild(row);
+  closeModal('modal-add-ingredient');
+  // clear fields
+  ['ing-name','ing-exp-yield','ing-act-yield','ing-reorder'].forEach(id => document.getElementById(id).value='');
+  showToast('✅ Ingredient "'+name+'" added!');
+}
+
+// ── Add Vendor ──
+function addVendor() {
+  const name    = document.getElementById('v-name').value;
+  const type    = document.getElementById('v-type').value;
+  const contact = document.getElementById('v-contact').value;
+  const phone   = document.getElementById('v-phone').value;
+  if (!required(name,'Vendor name')) return;
+  const row = document.createElement('tr');
+  row.innerHTML = `<td>${name}</td><td>${type}</td><td>${contact||'—'}</td><td>${phone||'—'}</td><td><span class="badge badge-ok">Active</span></td>`;
+  document.querySelector('#vendor-table').appendChild(row);
+  closeModal('modal-add-vendor');
+  ['v-name','v-contact','v-phone'].forEach(id => document.getElementById(id).value='');
+  showToast('✅ Vendor "'+name+'" added!');
+}
+
+// ── Add Purchase Order ──
+function addOrder() {
+  const invoice = document.getElementById('o-invoice').value;
+  const vendor  = document.getElementById('o-vendor').value;
+  const items   = document.getElementById('o-items').value;
+  const date    = document.getElementById('o-date').value;
+  const total   = document.getElementById('o-total').value;
+  if (!required(invoice,'Invoice #')) return;
+  const fmt = d => { const dt = new Date(d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); };
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${invoice}</td><td>${vendor}</td><td>${date ? fmt(date) : '—'}</td>
+    <td style="color:var(--text-muted);font-size:12px">${items||'—'}</td>
+    <td>${total ? '$'+parseFloat(total).toFixed(2) : '—'}</td>
+    <td><span class="badge badge-pending">Pending</span></td>`;
+  document.querySelector('#orders-table').appendChild(row);
+  closeModal('modal-add-order');
+  ['o-invoice','o-items','o-total','o-date'].forEach(id => document.getElementById(id).value='');
+  showToast('✅ Order '+invoice+' created!');
+}
+
+// ── Add Menu Item ──
+function buildMenuCard(name, price, yld) {
+  const card = document.createElement('div');
+  card.className = 'menu-card';
+  const priceStr = price ? '$' + parseFloat(price).toFixed(2) : '—';
+  card.innerHTML = `
+    <svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="#FFF3E6"/><circle cx="32" cy="32" r="12" fill="#E8720C" opacity="0.7"/></svg>
+    <p class="name">${name}</p>
+    <p class="price">${priceStr}</p>
+    <p class="yield-qty">Ingredients required: <span>${yld || '—'}</span></p>`;
+  return card;
+}
+
+function saveMenuItems() {
+  const stored = JSON.parse(localStorage.getItem('menuItems_clean') || '[]');
+  return stored;
+}
+
+function addMenuItem() {
+  const name  = document.getElementById('m-name').value.trim();
+  const price = document.getElementById('m-price').value;
+  const yld   = document.getElementById('m-yield').value.trim();
+  if (!required(name, 'Item name')) return;
+
+  // Build & append card
+  const card = buildMenuCard(name, price, yld);
+  document.querySelector('.menu-grid').appendChild(card);
+
+  // Persist to localStorage
+  const stored = JSON.parse(localStorage.getItem('menuItems_clean') || '[]');
+  stored.push({ name, price, yld });
+  localStorage.setItem('menuItems_clean', JSON.stringify(stored));
+
+  closeModal('modal-add-menu');
+  ['m-name','m-price','m-yield'].forEach(id => document.getElementById(id).value = '');
+  showToast('\u2705 Recipe item "' + name + '" added!');
+}
+
+function restoreMenuItems() {
+  const stored = JSON.parse(localStorage.getItem('menuItems_clean') || '[]');
+  const grid = document.querySelector('.menu-grid');
+  stored.forEach(function(item) {
+    grid.appendChild(buildMenuCard(item.name, item.price, item.yld));
+  });
+}
+
+// ── Waste Cost Auto-Lookup (Ted's request: derive cost from ingredients list) ──
+function lookupWasteCost() {
+  const sel = document.getElementById('w-ing');
+  const qtyEl = document.getElementById('w-cost');
+  const qty = parseFloat(document.getElementById('w-qty').value) || 0;
+  const opt = sel.options[sel.selectedIndex];
+  const unitCost = opt ? parseFloat(opt.getAttribute('data-cost')) || 0 : 0;
+  if (unitCost > 0 && qty > 0) {
+    document.getElementById('w-cost').value = (unitCost * qty).toFixed(2);
+  } else {
+    document.getElementById('w-cost').value = '';
+  }
+}
+
+// ── Log Waste ──
+function addWaste() {
+  const ingEl  = document.getElementById('w-ing');
+  const ing    = ingEl.value;
+  const reason = document.getElementById('w-reason').value;
+  const qty    = document.getElementById('w-qty').value;
+  const cost   = document.getElementById('w-cost').value;
+  const loc    = document.getElementById('w-loc').value || '—';
+  const date   = document.getElementById('w-date').value;
+  if (!ing) { alert('Please select an ingredient.'); return; }
+  const fmt = d => { const dt = new Date(d); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}); };
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${ing}</td><td>${reason}</td><td>${qty||'—'}</td>
+    <td>${cost ? '$'+parseFloat(cost).toFixed(2) : '—'}</td>
+    <td>${loc}</td>
+    <td>${date ? fmt(date) : '—'}</td>`;
+  document.querySelector('#waste-table').appendChild(row);
+  closeModal('modal-log-waste');
+  document.getElementById('w-ing').selectedIndex = 0;
+  document.getElementById('w-loc').selectedIndex = 0;
+  ['w-qty','w-cost','w-date'].forEach(id => document.getElementById(id).value='');
+  showToast('✅ Waste entry logged!');
+}
+
+// ── Add Location (put-away) ──
+function addLocation() {
+  const name    = document.getElementById('loc-name').value.trim();
+  const type    = document.getElementById('loc-type').value;
+  const zone    = document.getElementById('loc-zone').value;
+  const address = document.getElementById('loc-address').value.trim();
+  const notes   = document.getElementById('loc-notes').value.trim();
+  if (!required(name,'Location name')) return;
+  const zoneMap = {'On truck':'badge-ok','Off-site':'badge-warn','Commissary':'badge-ok'};
+  const emoji = type.includes('Cold')||type.includes('Refrigerator') ? '❄️' :
+                type.includes('Freezer') ? '🧊' :
+                type.includes('Dry') ? '📦' : '📍';
+  const card = document.createElement('div');
+  card.className = 'loc-card';
+  card.innerHTML = `
+    <div class="loc-card-header">
+      <h3>${emoji} ${name}</h3>
+      <span class="badge ${zoneMap[zone]||'badge-ok'}">${zone}</span>
+    </div>
+    <div class="loc-card-body">
+      <div class="loc-detail"><span class="icon">📋</span><span class="val">${type}</span></div>
+      ${address ? `<div class="loc-detail"><span class="icon">📌</span><span class="val">${address}</span></div>` : ''}
+      ${notes   ? `<div class="loc-detail"><span class="icon">📝</span><span class="val">${notes}</span></div>` : ''}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0dcc8">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;margin-bottom:6px">🔢 Cycle count — ingredients here</div>
+        <div style="font-size:12px;color:#8a7360;font-style:italic">No ingredients assigned yet</div>
+      </div>
+    </div>`;
+  document.getElementById('location-grid').appendChild(card);
+  const countEl = document.getElementById('loc-count');
+  if (countEl) countEl.textContent = parseInt(countEl.textContent||0) + 1;
+  closeModal('modal-add-location');
+  ['loc-name','loc-address','loc-notes'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('loc-type').selectedIndex = 0;
+  document.getElementById('loc-zone').selectedIndex = 0;
+  showToast('✅ Location "'+name+'" added!');
+}
+
+// ── Set truck hero image (call with your file path) ──
+function setTruckImage(path) {
+  document.getElementById('hero-truck-img').src = path;
+}
+
+// Init
+applyPeriodData('This Week');
+
+// ═══════════════════════════════════════════════
+// TED'S RECIPE-INVENTORY DATA MODEL
+// ═══════════════════════════════════════════════
+const db = {
+  ingredients: [
+    {id:'i1', name:'Ground Beef', unit:'oz',  stock:320, safeStock:180, expY:90, actY:85},
+    {id:'i2', name:'Burger Bun',  unit:'pcs', stock:48,  safeStock:30,  expY:100,actY:100},
+    {id:'i3', name:'Tomato',      unit:'oz',  stock:24,  safeStock:20,  expY:80, actY:72},
+    {id:'i4', name:'Lettuce',     unit:'oz',  stock:18,  safeStock:15,  expY:85, actY:80},
+    {id:'i5', name:'Cheese',      unit:'oz',  stock:40,  safeStock:24,  expY:100,actY:100},
+    {id:'i6', name:'Potato',      unit:'lbs', stock:22,  safeStock:10,  expY:78, actY:72},
+    {id:'i7', name:'Fry Oil',     unit:'oz',  stock:64,  safeStock:32,  expY:100,actY:100},
+    {id:'i8', name:'Chicken',     unit:'oz',  stock:6,   safeStock:20,  expY:88, actY:82},
+    {id:'i9', name:'Wrap',        unit:'pcs', stock:20,  safeStock:12,  expY:100,actY:100},
+    {id:'i10',name:'Paneer',      unit:'oz',  stock:30,  safeStock:16,  expY:92, actY:88},
+    {id:'i11',name:'Soft Drink',  unit:'cans',stock:36,  safeStock:20,  expY:100,actY:100},
+  ],
+  recipes: [
+    {id:'r1',name:'Classic Burger',menuId:'m1',batchYield:1,ings:[{ingId:'i1',qty:6},{ingId:'i2',qty:1},{ingId:'i3',qty:2},{ingId:'i4',qty:1},{ingId:'i5',qty:1}]},
+    {id:'r2',name:'Veggie Burger', menuId:'m2',batchYield:1,ings:[{ingId:'i2',qty:1},{ingId:'i3',qty:2},{ingId:'i4',qty:2},{ingId:'i5',qty:1}]},
+    {id:'r3',name:'Loaded Fries',  menuId:'m3',batchYield:1,ings:[{ingId:'i6',qty:0.5},{ingId:'i7',qty:4},{ingId:'i5',qty:1}]},
+    {id:'r4',name:'Chicken Roll',  menuId:'m4',batchYield:1,ings:[{ingId:'i8',qty:5},{ingId:'i9',qty:1},{ingId:'i3',qty:1},{ingId:'i4',qty:1}]},
+    {id:'r5',name:'Paneer Wrap',   menuId:'m5',batchYield:1,ings:[{ingId:'i10',qty:4},{ingId:'i9',qty:1},{ingId:'i3',qty:1}]},
+    {id:'r6',name:'Cold Drink',    menuId:'m6',batchYield:1,ings:[{ingId:'i11',qty:1}]},
+  ],
+  menuItems:[
+    {id:'m1',name:'Classic Burger',emoji:'🍔',price:9.99},
+    {id:'m2',name:'Veggie Burger', emoji:'🌿',price:8.99},
+    {id:'m3',name:'Loaded Fries',  emoji:'🍟',price:5.99},
+    {id:'m4',name:'Chicken Roll',  emoji:'🌯',price:8.49},
+    {id:'m5',name:'Paneer Wrap',   emoji:'🧀',price:7.99},
+    {id:'m6',name:'Cold Drink',    emoji:'🥤',price:2.49},
+  ],
+  sales:[]
+};
+
+// Helpers
+function ingById(id){return db.ingredients.find(i=>i.id===id);}
+function stockPct(i){return Math.min(100,Math.round((i.stock/i.safeStock)*100));}
+function stockStatus(i){const p=stockPct(i);return p<=0?'Out':p<50?'Low':'OK';}
+function stockBadgeClass(i){const s=stockStatus(i);return s==='Out'?'badge-bad':s==='Low'?'badge-warn':'badge-ok';}
+function recipeCost(rec){return rec.ings.reduce((s,ri)=>{const i=ingById(ri.ingId);return s+(i?ri.qty*0.12:0);},0);}
+function fmtTime(){const n=new Date();return n.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}
+
+// Populate Quick Sale dropdown
+function populateQSDropdown(){
+  const sel=document.getElementById('qs-item');if(!sel)return;
+  sel.innerHTML='';
+  db.menuItems.forEach(mi=>{const o=document.createElement('option');o.value=mi.id;o.textContent=mi.emoji+' '+mi.name;sel.appendChild(o);});
+}
+
+// Quick Sale - deducts inventory via recipe
+function quickSale(){
+  const menuId=document.getElementById('qs-item').value;
+  const qty=parseInt(document.getElementById('qs-qty').value)||1;
+  const mi=db.menuItems.find(m=>m.id===menuId);
+  const rec=db.recipes.find(r=>r.menuId===menuId);
+  if(!mi||!rec){showToast('No recipe linked to this item!');return;}
+  for(const ri of rec.ings){
+    const ing=ingById(ri.ingId);if(!ing)continue;
+    const needed=(ri.qty/(ing.actY/100))*qty;
+    if(ing.stock<needed){showToast('Not enough '+ing.name+'!');return;}
+  }
+  for(const ri of rec.ings){
+    const ing=ingById(ri.ingId);if(!ing)continue;
+    ing.stock=Math.max(0,+(ing.stock-(ri.qty/(ing.actY/100))*qty).toFixed(2));
+  }
+  const rev=mi.price*qty;
+  db.sales.push({time:fmtTime(),name:mi.emoji+' '+mi.name,qty,rev});
+  showToast('Sold '+qty+'x '+mi.name+' - $'+rev.toFixed(2)+' - stock deducted!');
+  renderSalesFeed();renderLiveInventory();renderRecipeChain();updateStockAlerts();
+}
+
+// Sales Feed
+function renderSalesFeed(){
+  const c=document.getElementById('sales-feed');if(!c)return;
+  if(!db.sales.length){c.innerHTML='<div style="color:#8a7360;padding:10px 0;text-align:center;font-size:13px">No sales yet</div>';return;}
+  c.innerHTML='';
+  [...db.sales].reverse().forEach(s=>{
+    const d=document.createElement('div');
+    d.style.cssText='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0dcc8;font-size:12.5px';
+    d.innerHTML='<span>'+s.time+' <strong>'+s.name+'</strong> x'+s.qty+'</span><span style="font-weight:700;color:#2f7a3d">+$'+s.rev.toFixed(2)+'</span>';
+    c.appendChild(d);
+  });
+}
+
+// Live Inventory
+function renderLiveInventory(){
+  const c=document.getElementById('live-inventory');if(!c)return;
+  c.innerHTML='';
+  [...db.ingredients].sort((a,b)=>stockPct(a)-stockPct(b)).forEach(ing=>{
+    const pct=stockPct(ing),s=stockStatus(ing);
+    const col=s==='Out'?'#c0392b':s==='Low'?'#d97706':'#2f7a3d';
+    const r=document.createElement('div');
+    r.style.cssText='display:flex;align-items:center;gap:9px;padding:7px 12px;border-bottom:1px solid #f0dcc8;font-size:12.5px';
+    r.innerHTML='<div style="width:8px;height:8px;border-radius:50%;background:'+col+';flex-shrink:0"></div>'
+      +'<span style="flex:1;font-weight:600">'+ing.name+'</span>'
+      +'<div style="width:55px;height:5px;background:#f3f4f6;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:3px"></div></div>'
+      +'<span style="font-weight:700;font-size:12px;color:'+col+';min-width:60px;text-align:right">'+ing.stock+' '+ing.unit+'</span>';
+    c.appendChild(r);
+  });
+}
+
+// Recipe Chain
+function renderRecipeChain(){
+  const c=document.getElementById('recipe-chain');if(!c)return;
+  c.innerHTML='';
+  db.recipes.forEach(rec=>{
+    const mi=db.menuItems.find(m=>m.id===rec.menuId);
+    const cost=recipeCost(rec),margin=mi?Math.round(((mi.price-cost)/mi.price)*100):0;
+    const row=document.createElement('div');
+    row.style.cssText='padding:9px 12px;border-bottom:1px solid #f0dcc8;cursor:pointer;transition:background .15s';
+    row.onmouseenter=function(){this.style.background='#FFF3E6';};
+    row.onmouseleave=function(){this.style.background='';};
+    row.onclick=function(){document.getElementById('qs-item').value=rec.menuId;showToast('Selected: '+rec.name);};
+    const tags=rec.ings.map(ri=>{
+      const ing=ingById(ri.ingId);if(!ing)return'';
+      const s=stockStatus(ing);
+      const bg=s==='Out'?'#fde8e8':s==='Low'?'#fef3c7':'#e7f5ea';
+      const tc=s==='Out'?'#991b1b':s==='Low'?'#92400e':'#065f46';
+      return'<span style="background:'+bg+';color:'+tc+';border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600">'+ing.name+' '+ri.qty+ing.unit+'</span>';
+    }).join('');
+    row.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+      +'<span style="font-size:13px;font-weight:700">'+(mi?mi.emoji:'')+' '+rec.name+'</span>'
+      +'<span style="font-size:11px;color:#8a7360">Yield: <strong>'+rec.batchYield+'</strong> serving | Margin: <strong style="color:#2f7a3d">'+margin+'%</strong></span>'
+      +'</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+tags+'</div>';
+    c.appendChild(row);
+  });
+}
+
+// Yield Summary
+function renderYieldSummary(){
+  const c=document.getElementById('yield-summary');if(!c)return;
+  c.innerHTML='';
+  const mk=function(txt){const d=document.createElement('div');d.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#8a7360;padding:6px 12px;background:#fafafa;border-bottom:1px solid #f0dcc8';d.textContent=txt;c.appendChild(d);};
+  mk('Ingredient Yield — usable % after prep & waste');
+  db.ingredients.forEach(function(ing){
+    const d=ing.actY-ing.expY,col=d<0?'#c0392b':'#2f7a3d';
+    const r=document.createElement('div');
+    r.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid #f0dcc8;font-size:12px';
+    r.innerHTML='<span style="width:82px;flex-shrink:0;font-weight:600">'+ing.name+'</span>'
+      +'<div style="flex:1;height:7px;background:#f3f4f6;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+ing.actY+'%;background:'+(ing.actY>=ing.expY?'#2f7a3d':'#E8720C')+';border-radius:4px"></div></div>'
+      +'<span style="font-weight:700;width:33px;text-align:right">'+ing.actY+'%</span>'
+      +'<span style="font-size:11px;font-weight:700;color:'+col+';width:34px">'+(d>=0?'+':'')+d+'%</span>';
+    c.appendChild(r);
+  });
+  mk('Recipe Yield — servings produced per batch');
+  db.recipes.forEach(function(rec){
+    const mi=db.menuItems.find(function(m){return m.id===rec.menuId;});
+    const r=document.createElement('div');
+    r.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #f0dcc8;font-size:12.5px';
+    r.innerHTML=(mi?mi.emoji:'')+' <strong>'+rec.name+'</strong>'
+      +'<span><span style="font-size:15px;font-weight:800;color:#E8720C">'+rec.batchYield+'</span>'
+      +' <span style="color:#8a7360">serving'+( rec.batchYield>1?'s':'')+'/batch | '+rec.ings.length+' ingredients</span></span>';
+    c.appendChild(r);
+  });
+}
+
+// Stock Alerts
+function updateStockAlerts(){
+  const c=document.getElementById('stock-alerts');if(!c)return;
+  const issues=db.ingredients.filter(function(i){return stockStatus(i)!=='OK';});
+  if(!issues.length){c.innerHTML='<div style="color:#2f7a3d;padding:6px 0;font-size:13px">All stock levels OK</div>';return;}
+  c.innerHTML='';
+  issues.forEach(function(ing){
+    const s=stockStatus(ing),col=s==='Out'?'#c0392b':'#d97706';
+    const d=document.createElement('div');
+    d.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0dcc8;font-size:12.5px';
+    d.innerHTML='<span>'+(s==='Out'?'🔴':'🟡')+' <strong>'+ing.name+'</strong></span>'
+      +'<span style="font-weight:700;color:'+col+'">'+ing.stock+' '+ing.unit+'</span>';
+    c.appendChild(d);
+  });
+}
+
+// Init dashboard
+function initDashboard(){
+  populateQSDropdown();
+  renderSalesFeed();
+  renderLiveInventory();
+  renderRecipeChain();
+  renderYieldSummary();
+  updateStockAlerts();
+  restoreMenuItems(); // Reload dynamically-added cards after page refresh
+}
+
+window.addEventListener('DOMContentLoaded', function(){ initDashboard(); });
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
